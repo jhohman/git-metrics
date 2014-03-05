@@ -1,0 +1,72 @@
+#!/usr/bin/awk -f
+BEGIN {
+   debug=0;
+   sha1="";
+   name=0;
+   subject=0;
+   body="";
+   date=0;
+   stats=0;
+   insertions=0;
+   deletions=0;
+
+   inBody=0;
+   inStats=0;
+   FS=":";
+}
+
+{
+    if ( $1 == "sha1" ) {
+        if (debug) print "-----------------------------------------------------------------------------------------";
+
+	if( sha1 != "") {
+	    json = "{\"sha1\":\"" sha1 "\", \"date\":\"" date "\", \"name\":\"" name "\", \"subject\":\"" subject "\", \"body\":\"" body "\"}"
+	    print json > ("/tmp/" sha1 ".json"); 
+	    #print json
+	    system("curl -XPOST 'http://localhost:9200/git/lms/" sha1 "' --data-binary @/tmp/" sha1 ".json")
+	    close("/tmp/" sha1 ".json");
+	}
+
+        sha1="";
+        date="";
+        name="";
+        subject="";
+        body="";
+
+	sha1=$2;
+	if (debug) print "sha1 ", sha1;
+    }
+
+    if ( $1 == "Date" ) {
+	date=$2 ":" $3 ":" $4;
+	if (debug) print "date ", date;
+    }
+
+    if ( $1 == "Name" ) {
+	name=$2;
+	if (debug) print "name ", name;
+    }
+
+    if ( $1 == "Subject" ) {
+	gsub("\"", "\\\"", $2);
+	subject=$2
+        if (debug) print "subject ", subject;
+    }
+
+    if ( $1 == "Stats" ) {
+	inBody=0;
+        if (debug) print "body ", body;
+    }
+
+    if ( $1 == "Body" ) {
+	inBody=1;
+    }
+
+    if ( inBody && $1 != "Body" ) {
+	gsub("\"", "\\\"", $0);
+	body = body " " $0;
+    }
+}
+
+END {
+}
