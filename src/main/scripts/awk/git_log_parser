@@ -6,7 +6,10 @@ BEGIN {
    subject=0;
    body="";
    date=0;
+   issue="";
    stats=0;
+   fileRowCounter=0;
+   fileStats[0]=0;
    insertions=0;
    deletions=0;
 
@@ -16,11 +19,23 @@ BEGIN {
 }
 
 {
+  if( NF ) {
     if ( $1 == "sha1" ) {
         if (debug) print "-----------------------------------------------------------------------------------------";
 
 	if( sha1 != "") {
-	    json = "{\"sha1\":\"" sha1 "\", \"date\":\"" date "\", \"name\":\"" name "\", \"subject\":\"" subject "\", \"body\":\"" body "\"}"
+	    json = "{\"sha1\":\"" sha1 "\", \"date\":\"" date "\", \"name\":\"" name "\", \"issue\":\"" issue "\", \"subject\":\"" subject "\", \"body\":\"" body "\", ";
+	    json = json "\"stats\": ["; 
+	    n=0;
+	    for(j in fileStats) {n++;}
+	    for (i=0; i < (n/3); i++) {
+		json = json "{" "\"path\":\"" fileStats[i ",path"] "\",";
+		json = json "\"inserts\":\"" fileStats[i ",inserted"] "\",";
+		json = json "\"deletes\":\"" fileStats[i ",deleted"] "\"}";
+		if(i != (n/3)-1) json = json ",";
+	    }
+	    json = json "]";
+	    json = json "}";
 	    print json > ("/tmp/" sha1 ".json"); 
 	    #print json
 	    system("curl -XPOST 'http://localhost:9200/git/lms/" sha1 "' --data-binary @/tmp/" sha1 ".json")
@@ -32,6 +47,10 @@ BEGIN {
         name="";
         subject="";
         body="";
+	issue="";
+	inStats=0;
+	fileRowCounter=0;
+	delete fileStats;
 
 	sha1=$2;
 	if (debug) print "sha1 ", sha1;
@@ -50,22 +69,37 @@ BEGIN {
     if ( $1 == "Subject" ) {
 	gsub("\"", "\\\"", $2);
 	subject=$2
+	if( match($2, /#[0-9]{3,5}/) ) {
+	    issue=substr($2, RSTART+1, RLENGTH-1);
+	}
         if (debug) print "subject ", subject;
     }
 
     if ( $1 == "Stats" ) {
 	inBody=0;
+	inStats=1;
         if (debug) print "body ", body;
+    }
+
+    if ( inStats && $1 != "Stats" ) {
+	split($0, fileRow, "\\t");
+	
+	fileStats[fileRowCounter ",inserted"] = fileRow[1];
+	fileStats[fileRowCounter ",deleted"] = fileRow[2];
+	fileStats[fileRowCounter ",path"] = fileRow[3];
+	fileRowCounter++;
     }
 
     if ( $1 == "Body" ) {
 	inBody=1;
+	inStats=0;
     }
 
     if ( inBody && $1 != "Body" ) {
 	gsub("\"", "\\\"", $0);
 	body = body " " $0;
     }
+  }
 }
 
 END {
